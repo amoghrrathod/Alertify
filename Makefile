@@ -7,7 +7,7 @@ INCLUDE_DIR = include
 all: alertify
 
 alertify: src/alertify.c
-	$(CC) $(CFLAGS) -o alertify src/alertify.c -L$(LIB_DIR) -ljansson
+	$(CC) $(CFLAGS) -o alertify src/alertify.c -L$(LIB_DIR) -ljansson -luuid
 
 clean:
 	rm -f alertify

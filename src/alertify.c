@@ -1,35 +1,34 @@
+#include "../include/jansson/jansson.h" // Include the Jansson library for JSON handling
 #include <getopt.h>
-#include <jansson.h> // Include the Jansson library for JSON handling
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>      // For date comparison
+#include <time.h>      // Include for time functions
 #include <uuid/uuid.h> // For UUID generation
 
 #define FILE_NAME "reminders.json" // JSON file name
 
 // ANSI color codes
-#define COLOR_RESET "\033[0m"
+#define COLOR_RESET "\033[94m"
 #define COLOR_GREEN "\033[32m"   // Completed
 #define COLOR_YELLOW "\033[33m"  // Pending
 #define COLOR_RED "\033[31m"     // Overdue
 #define COLOR_MAGENTA "\033[35m" // Header
 
 void print_usage() {
-  printf(
-      COLOR_YELLOW
-      "Usage: alertify [options]\n" COLOR_RESET "Options:\n"
-      " -a, --add REMINDER      Add a new reminder\n"
-      " -d, --due DATE          Set due date (YYYY-MM-DD)\n"
-      " -p, --priority PRIORITY Set priority (Low, Medium, High)\n"
-      " -r, --remove ID         Remove a reminder by ID\n"
-      " -u, --update ID         Update a reminder by ID\n"
-      " -s, --set-status ID     Set the status of a reminder (Pending, "
-      "Completed, Overdue)\n"
-      " -x, --reset             Reset the reminders file\n"
-      " -b, --backup            Backup reminders to reminders_backup.json\n"
-      " -R, --restore           Restore reminders from reminders_backup.json\n"
-      " -h, --help              Show this help message\n");
+  printf(COLOR_YELLOW
+         "Usage: alertify [options]\n" COLOR_RESET "Options:\n"
+         " -a, --add REMINDER Add a new reminder\n"
+         " -d, --due DATE Set due date (YYYY-MM-DD)\n"
+         " -p, --priority PRIORITY Set priority (Low, Medium, High)\n"
+         " -r, --remove SERIAL Remove a reminder by serial number\n"
+         " -u, --update SERIAL Update a reminder by serial number\n"
+         " -s, --set-status SERIAL Set the status of a reminder (Pending, "
+         "Completed, Overdue) by serial number\n"
+         " -x, --reset Reset the reminders file\n"
+         " -b, --backup Backup reminders to reminders_backup.json\n"
+         " -R, --restore Restore reminders from reminders_backup.json\n"
+         " -h, --help Show this help message\n");
 }
 
 void print_header() {
@@ -90,12 +89,35 @@ void add_reminder(const char *reminder_text, const char *due_date,
   json_object_set_new(new_reminder, "status", json_string("Pending"));
 
   json_array_append(reminders, new_reminder);
-
   save_reminders(reminders);
 
   printf(COLOR_GREEN "Reminder added: %s\n" COLOR_RESET, reminder_text);
 
   json_decref(reminders);
+}
+
+// Function to check if the date is overdue
+int is_overdue(const char *due_date) {
+  if (strcmp(due_date, "N/A") == 0) {
+    return 0; // Not overdue if no due date
+  }
+
+  struct tm tm_due;
+  time_t now;
+  time_t due;
+  double seconds;
+
+  // Convert due_date to struct tm
+  strptime(due_date, "%Y-%m-%d", &tm_due);
+  due = mktime(&tm_due);
+
+  // Get current time
+  time(&now);
+
+  // Calculate difference in seconds
+  seconds = difftime(now, due);
+
+  return seconds > 0;
 }
 
 void list_reminders() {
@@ -104,121 +126,111 @@ void list_reminders() {
 
   size_t index;
   json_t *value;
+  int serial_number = 1;
 
   if (json_array_size(reminders) == 0) {
     printf(COLOR_YELLOW "No reminders found.\n" COLOR_RESET);
+    json_decref(reminders);
     return;
   }
 
+  // Temporary array to hold indices of reminders to be removed
+  json_t *to_remove = json_array();
+
+  // Print and collect reminders to remove
   json_array_foreach(reminders, index, value) {
-    printf("%s%s (Due: %s, Priority: %s)\n", COLOR_GREEN,
-           json_string_value(json_object_get(value, "reminder")),
-           json_string_value(json_object_get(value, "due")),
-           json_string_value(json_object_get(value, "priority")));
-  }
+    const char *status = json_string_value(json_object_get(value, "status"));
+    const char *reminder_text =
+        json_string_value(json_object_get(value, "reminder"));
+    const char *due_date = json_string_value(json_object_get(value, "due"));
+    const char *priority =
+        json_string_value(json_object_get(value, "priority"));
 
-  printf(COLOR_RESET); // Reset color after listing
-}
+    // Determine color based on status
+    const char *status_color;
 
-void remove_reminder(const char *uuid) {
-  json_t *reminders;
-  load_reminders(&reminders);
+    if (is_overdue(due_date) && strcmp(status, "Pending") == 0) {
+      status_color = COLOR_RED; // Overdue reminders in red
+    } else {
+      status_color = COLOR_YELLOW; // Pending reminders in yellow
+    }
 
-  size_t index;
-  json_t *value;
-
-  int found = 0;
-
-  for (index = 0; index < json_array_size(reminders); index++) {
-    value = json_array_get(reminders, index);
-
-    if (strcmp(json_string_value(json_object_get(value, "id")), uuid) == 0) {
-      found = 1;
-      json_array_remove(reminders, index);
-      break;
+    // If status is "Completed", add index to removal list
+    if (strcmp(status, "Completed") == 0) {
+      json_array_append_new(to_remove, json_integer(index));
+    } else {
+      printf("%s%02d. %s (Due: %s, Priority: %s, Status: %s)%s\n", status_color,
+             serial_number++, reminder_text, due_date, priority, status,
+             COLOR_RESET);
     }
   }
 
-  if (!found) {
-    fprintf(stderr, COLOR_RED "No reminder found with ID %s.\n" COLOR_RESET,
-            uuid);
-    return;
+  // Remove completed reminders from the main list
+  for (size_t i = 0; i < json_array_size(to_remove); i++) {
+    size_t remove_index = json_integer_value(json_array_get(to_remove, i));
+    json_array_remove(reminders, remove_index);
   }
 
   save_reminders(reminders);
-
-  printf(COLOR_RED "Reminder %s deleted.\n" COLOR_RESET, uuid);
-
   json_decref(reminders);
+  json_decref(to_remove);
 }
-
-void update_reminder(const char *uuid, const char *due_date,
-                     const char *priority) {
+void update_reminder_by_serial(int serial_number, const char *due_date,
+                               const char *priority) {
   json_t *reminders;
   load_reminders(&reminders);
 
   size_t index;
-  json_t *value;
-
   int found = 0;
 
   for (index = 0; index < json_array_size(reminders); index++) {
-    value = json_array_get(reminders, index);
-
-    if (strcmp(json_string_value(json_object_get(value, "id")), uuid) == 0) {
+    if (index == (size_t)(serial_number - 1)) {
       found = 1;
+      json_t *reminder = json_array_get(reminders, index);
 
       if (due_date != NULL) {
-        json_object_set(value, "due", json_string(due_date));
+        printf("Updating due date to %s\n", due_date); // Debug
+        json_object_set(reminder, "due", json_string(due_date));
       }
 
       if (priority != NULL) {
-        json_object_set(value, "priority", json_string(priority));
+        printf("Updating priority to %s\n", priority); // Debug
+        json_object_set(reminder, "priority", json_string(priority));
       }
 
-      printf(COLOR_GREEN "Reminder %s updated.\n" COLOR_RESET, uuid);
+      printf(COLOR_GREEN "Reminder %d updated.\n" COLOR_RESET, serial_number);
       break;
     }
   }
 
   if (!found) {
-    fprintf(stderr, COLOR_RED "No reminder found with ID %s.\n" COLOR_RESET,
-            uuid);
+    fprintf(stderr,
+            COLOR_RED "No reminder found with serial number %d.\n" COLOR_RESET,
+            serial_number);
   }
 
   save_reminders(reminders);
-
   json_decref(reminders);
 }
 
-void set_status(const char *uuid, const char *status) {
+void set_status_by_serial(int serial_number, const char *status) {
   json_t *reminders;
   load_reminders(&reminders);
 
-  size_t index;
-  json_t *value;
-
-  int found = 0;
-
-  for (index = 0; index < json_array_size(reminders); index++) {
-    value = json_array_get(reminders, index);
-
-    if (strcmp(json_string_value(json_object_get(value, "id")), uuid) == 0) {
-      found = 1;
-      json_object_set(value, "status", json_string(status));
-      break;
-    }
+  if (serial_number <= 0 || serial_number > json_array_size(reminders)) {
+    printf(COLOR_RED "No reminder found with serial number %d.\n" COLOR_RESET,
+           serial_number);
+    json_decref(reminders);
+    return;
   }
 
-  if (!found) {
-    fprintf(stderr, COLOR_RED "No reminder found with ID %s.\n" COLOR_RESET,
-            uuid);
-  } else {
-    printf(COLOR_GREEN "Status of reminder %s set to %s.\n" COLOR_RESET, uuid,
-           status);
-    save_reminders(reminders);
-  }
+  json_t *reminder = json_array_get(reminders, serial_number - 1);
+  json_object_set(reminder, "status", json_string(status));
 
+  printf(COLOR_GREEN "Status of reminder %d set to %s.\n" COLOR_RESET,
+         serial_number, status);
+
+  save_reminders(reminders);
   json_decref(reminders);
 }
 
@@ -237,7 +249,6 @@ void restore_reminders() {
     fprintf(stderr, COLOR_RED "Failed to restore reminders.\n" COLOR_RESET);
   }
 }
-
 int main(int argc, char *argv[]) {
   print_header(); // Print the header at the start
 
@@ -249,11 +260,16 @@ int main(int argc, char *argv[]) {
   }
 
   int opt;
+  int serial_number = -1; // Initialize with an invalid value
   char *reminder = NULL;
   char *due = NULL;
   char *priority = NULL;
-  char *uuid = NULL;
   char *status = NULL;
+
+  if (argc == 1) {
+    list_reminders();
+    return 0;
+  }
 
   static struct option long_options[] = {
       {"add", required_argument, NULL, 'a'},
@@ -274,31 +290,40 @@ int main(int argc, char *argv[]) {
     case 'a':
       reminder = optarg;
       break;
+
     case 'd':
       due = optarg;
       break;
+
     case 'p':
       priority = optarg;
       break;
+
     case 'r':
-      uuid = optarg;
+      serial_number = atoi(optarg);
       break;
+
     case 'u':
-      uuid = optarg;
+      serial_number = atoi(optarg);
       break;
+
     case 's':
-      uuid = optarg;
-      status = argv[optind]; // Get status
+      serial_number = atoi(optarg);
+      status = argv[optind];
       break;
+
     case 'b':
       backup_reminders();
       exit(0);
+
     case 'R':
       restore_reminders();
       exit(0);
+
     case 'x':
       reset_file();
       exit(0);
+
     case 'h':
     default:
       print_usage();
@@ -307,23 +332,15 @@ int main(int argc, char *argv[]) {
   }
 
   if (reminder) {
-    if (!due)
-      due = "N/A";
-    if (!priority)
-      priority = "Medium";
-    add_reminder(reminder, due, priority);
+    add_reminder(reminder, due ? due : "N/A", priority ? priority : "Medium");
   }
 
-  if (uuid && status) {
-    set_status(uuid, status);
-  }
-
-  if (uuid && due && priority) {
-    update_reminder(uuid, due, priority);
-  }
-
-  if (uuid) {
-    remove_reminder(uuid);
+  if (serial_number > 0) {
+    if (status) {
+      set_status_by_serial(serial_number, status);
+    } else {
+      update_reminder_by_serial(serial_number, due, priority);
+    }
   }
 
   list_reminders();
