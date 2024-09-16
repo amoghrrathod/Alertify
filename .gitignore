@@ -1,0 +1,10 @@
+# Ignore build artifacts
+alertify
+*.o
+*.a
+
+# Ignore other files
+*.log
+
+# Ignore local configurations
+local/

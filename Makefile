@@ -1,13 +1,13 @@
-
 CC = gcc
-CFLAGS = -Wall
-LIBS = $(shell pkg-config --cflags --libs jansson)# Use shell to evaluate pkg-config
+CFLAGS = -Wall -Iinclude -Iinclude/jansson
 
-# Ensure the file compiles properly and links against jansson
+LIB_DIR = lib/jansson
+INCLUDE_DIR = include
+
 all: alertify
 
-alertify: alertify.c
-	$(CC) $(CFLAGS) -o alertify alertify.c $(LIBS)
+alertify: src/alertify.c
+	$(CC) $(CFLAGS) -o alertify src/alertify.c -L$(LIB_DIR) -ljansson
 
 clean:
 	rm -f alertify
@@ -17,4 +17,3 @@ install: alertify
 
 uninstall:
 	sudo rm -f /usr/local/bin/alertify
-
