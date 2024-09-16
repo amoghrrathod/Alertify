@@ -1,15 +1,14 @@
 class Alertify < Formula
-  desc "Reminder management CLI tool"
-  homepage "https://github.com/amoghrrathod/alertify"
-  url "https://github.com/yourusername/alertify/archive/v1.0.tar.gz"
-  sha256 "your_tarball_sha256"
+  desc "CLI tool for managing reminders"
+  homepage "https://github.com/amoghrrathod/alertify.c"
+  url "https://github.com/amoghrrathod/alertify.c/alertify-1.0.0.tar.gz"
+  sha256 "1c8333d3ea2ca2c5214121e1f30d7b3e8b71c19b3f0edc5b51703e31211e06e9"
 
   depends_on "jansson"
-  depends_on "ossp-uuid" # macOS Homebrew package
+  depends_on "uuid"
 
   def install
-    system "make"
-    bin.install "alertify"
+    system "make", "install", "PREFIX=#{prefix}"
   end
 
   test do
