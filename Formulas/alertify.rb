@@ -8,7 +8,7 @@ class Alertify < Formula
   depends_on "uuid"
 
   def install
-    system "make", "install", "PREFIX=#{prefix}"
+    system "make", "PREFIX=#{prefix}"
   end
 
   test do
