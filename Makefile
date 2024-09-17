@@ -11,8 +11,6 @@ alertify: src/alertify.c
 
 system:
 	sudo mv ./alertify /usr/bin/alertify 
-
-clean:
 	rm -f alertify
 
 install: alertify
