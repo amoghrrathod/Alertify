@@ -1,13 +1,16 @@
 CC = gcc
 CFLAGS = -Wall -Iinclude -Iinclude/jansson
+LIBS = -ljansson -lm
 
 LIB_DIR = lib/jansson
-INCLUDE_DIR = include
 
 all: alertify
 
 alertify: src/alertify.c
-	$(CC) $(CFLAGS) -o alertify src/alertify.c -L$(LIB_DIR) -ljansson -luuid
+	$(CC) $(CFLAGS) -o alertify src/alertify.c -L$(LIB_DIR) $(LIBS)
+
+system:
+	sudo mv ./alertify /usr/bin/alertify 
 
 clean:
 	rm -f alertify

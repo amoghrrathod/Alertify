@@ -1,10 +1,9 @@
-#include "../include/jansson/jansson.h" // Include the Jansson library for JSON handling
+#include "../include/jansson/jansson.h"
 #include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>      // Include for time functions
-#include <uuid/uuid.h> // For UUID generation
 
 #define FILE_NAME "reminders.json" // JSON file name
 
@@ -67,22 +66,16 @@ void save_reminders(json_t *reminders) {
   json_dump_file(reminders, FILE_NAME, JSON_INDENT(4));
 }
 
-void generate_uuid(char *uuid_str) {
-  uuid_t uuid;
-  uuid_generate(uuid);
-  uuid_unparse_lower(uuid, uuid_str);
-}
-
 void add_reminder(const char *reminder_text, const char *due_date,
                   const char *priority) {
   json_t *reminders;
   load_reminders(&reminders);
 
-  char uuid_str[37]; // UUID string length
-  generate_uuid(uuid_str);
+  // Determine the next available numeric ID
+  int next_id = json_array_size(reminders) + 1;
 
   json_t *new_reminder = json_object();
-  json_object_set_new(new_reminder, "id", json_string(uuid_str));
+  json_object_set_new(new_reminder, "id", json_integer(next_id));
   json_object_set_new(new_reminder, "reminder", json_string(reminder_text));
   json_object_set_new(new_reminder, "due", json_string(due_date));
   json_object_set_new(new_reminder, "priority", json_string(priority));
@@ -175,39 +168,33 @@ void list_reminders() {
   json_decref(reminders);
   json_decref(to_remove);
 }
+
 void update_reminder_by_serial(int serial_number, const char *due_date,
                                const char *priority) {
   json_t *reminders;
   load_reminders(&reminders);
 
-  size_t index;
-  int found = 0;
-
-  for (index = 0; index < json_array_size(reminders); index++) {
-    if (index == (size_t)(serial_number - 1)) {
-      found = 1;
-      json_t *reminder = json_array_get(reminders, index);
-
-      if (due_date != NULL) {
-        printf("Updating due date to %s\n", due_date); // Debug
-        json_object_set(reminder, "due", json_string(due_date));
-      }
-
-      if (priority != NULL) {
-        printf("Updating priority to %s\n", priority); // Debug
-        json_object_set(reminder, "priority", json_string(priority));
-      }
-
-      printf(COLOR_GREEN "Reminder %d updated.\n" COLOR_RESET, serial_number);
-      break;
-    }
-  }
-
-  if (!found) {
+  if (serial_number <= 0 || serial_number > json_array_size(reminders)) {
     fprintf(stderr,
             COLOR_RED "No reminder found with serial number %d.\n" COLOR_RESET,
             serial_number);
+    json_decref(reminders);
+    return;
   }
+
+  json_t *reminder = json_array_get(reminders, serial_number - 1);
+
+  if (due_date != NULL) {
+    printf("Updating due date to %s\n", due_date); // Debug
+    json_object_set(reminder, "due", json_string(due_date));
+  }
+
+  if (priority != NULL) {
+    printf("Updating priority to %s\n", priority); // Debug
+    json_object_set(reminder, "priority", json_string(priority));
+  }
+
+  printf(COLOR_GREEN "Reminder %d updated.\n" COLOR_RESET, serial_number);
 
   save_reminders(reminders);
   json_decref(reminders);
@@ -249,6 +236,7 @@ void restore_reminders() {
     fprintf(stderr, COLOR_RED "Failed to restore reminders.\n" COLOR_RESET);
   }
 }
+
 int main(int argc, char *argv[]) {
   print_header(); // Print the header at the start
 
