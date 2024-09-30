@@ -3,10 +3,7 @@
 
 # Installing Alertify 
 ```bash
-git clone "https://github.com/amoghrrathod/alertify.git"
-cd alertify
-make && make install
-sudo rm -rf ~/path to installation directory/alertify
+brew install amoghrrathod/alertify/alertify
 ```
 # Uninstalling Alertify
 ```bash
