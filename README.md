@@ -2,7 +2,7 @@
 
 
 # Installing Alertify 
-## For MacOS/Linux
+## Using HomeBrew
 ```bash
 brew install amoghrrathod/alertify/alertify
 ```
